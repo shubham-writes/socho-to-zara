@@ -51,6 +51,8 @@ def alert_failure(error_msg: str):
     """
     Sends a loud alert when something fails.
     """
+    import html
+    safe_msg = html.escape(error_msg)
     msg = "🚨 <b>Riddle Reel Pipeline Failed!</b>\n\n"
-    msg += f"<pre>{error_msg}</pre>"
+    msg += f"<pre>{safe_msg}</pre>"
     send_telegram_message(msg, silent=False)

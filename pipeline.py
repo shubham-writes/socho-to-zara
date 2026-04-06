@@ -175,7 +175,7 @@ def main():
         # STAGE 4: Video Assembly
         # ══════════════════════════════════════════════════════════════
         logger.info("━━━ STAGE 4: Assembling Reel ━━━")
-        export_dir = Path(r"C:\Users\Shubham\Downloads\TEMPORARY\riddleReels")
+        export_dir = config.REELS_DIR
         export_dir.mkdir(parents=True, exist_ok=True)
         
         riddle_id = riddle_data.get("id", "unknown")
