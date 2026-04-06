@@ -1,0 +1,10 @@
+edge-tts
+moviepy>=2.0.0
+Pillow
+requests
+python-dotenv
+google-generativeai
+schedule
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
