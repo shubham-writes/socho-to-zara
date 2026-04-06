@@ -17,24 +17,42 @@ SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
 
 def get_authenticated_service(client_secret_file, token_file):
     """Authenticates the user and returns the YouTube service object."""
+    from google.auth.exceptions import RefreshError
+    import json
     creds = None
-    # The file token.json stores the user's access and refresh tokens, and is
-    # created automatically when the authorization flow completes for the first
-    # time.
+    # The file token.json stores the user's access and refresh tokens
     if os.path.exists(token_file):
-        creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+        if os.path.getsize(token_file) > 0:
+            try:
+                creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+            except Exception as e:
+                logger.error(f"❌ Failed to parse token.json. It may be corrupt or empty: {e}")
+                creds = None
+        else:
+            logger.error("❌ token.json is exactly 0 bytes. Check if your GOOGLE_TOKEN_BASE64 secret is set correctly in GitHub.")
+
     # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            if not os.path.exists(client_secret_file):
-                logger.error(f"❌ Cannot find client secret file at {client_secret_file}.")
-                logger.error("Please set up Google Cloud Console and download the OAuth 2.0 Client ID JSON file as client_secret.json.")
+            try:
+                creds.refresh(Request())
+            except RefreshError as e:
+                logger.error(f"❌ Token refresh failed: {e}. You may need to regenerate your token.json locally.")
                 return None
-            flow = InstalledAppFlow.from_client_secrets_file(
-                client_secret_file, SCOPES)
-            creds = flow.run_local_server(port=0)
+        else:
+            if not os.path.exists(client_secret_file) or os.path.getsize(client_secret_file) == 0:
+                logger.error(f"❌ Cannot find or validate client secret file at {client_secret_file}.")
+                logger.error("Please ensure GOOGLE_CLIENT_SECRET_BASE64 secret is configured correctly in GitHub.")
+                return None
+            
+            # If we are strictly headless (like GitHub Actions), run_local_server will hang or crash.
+            flow = InstalledAppFlow.from_client_secrets_file(client_secret_file, SCOPES)
+            try:
+                creds = flow.run_local_server(port=0)
+            except Exception as e:
+                logger.error(f"❌ Cannot open browser for authentication. Are you running on a cloud server? {e}")
+                return None
+
         # Save the credentials for the next run
         with open(token_file, 'w') as token:
             token.write(creds.to_json())
