@@ -35,11 +35,11 @@ jobs:
           
       - name: Assemble Credentials
         env:
-          GOOGLE_CLIENT_SECRET_BASE64: ${{ secrets.GOOGLE_CLIENT_SECRET_BASE64 }}
-          GOOGLE_TOKEN_BASE64: ${{ secrets.GOOGLE_TOKEN_BASE64 }}
+          GOOGLE_CLIENT_SECRET_JSON: ${{ secrets.GOOGLE_CLIENT_SECRET_JSON }}
+          GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
         run: |
-          python -c "import os, base64; open('client_secret.json', 'wb').write(base64.b64decode(os.environ.get('GOOGLE_CLIENT_SECRET_BASE64', '')))"
-          python -c "import os, base64; open('token.json', 'wb').write(base64.b64decode(os.environ.get('GOOGLE_TOKEN_BASE64', '')))"
+          echo "$GOOGLE_CLIENT_SECRET_JSON" > client_secret.json
+          echo "$GOOGLE_TOKEN_JSON" > token.json
           
       - name: Run Pipeline
         env:

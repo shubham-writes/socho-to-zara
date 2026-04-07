@@ -29,7 +29,7 @@ def get_authenticated_service(client_secret_file, token_file):
                 logger.error(f"❌ Failed to parse token.json. It may be corrupt or empty: {e}")
                 creds = None
         else:
-            logger.error("❌ token.json is exactly 0 bytes. Check if your GOOGLE_TOKEN_BASE64 secret is set correctly in GitHub.")
+            logger.error("❌ token.json is exactly 0 bytes. Check if your GOOGLE_TOKEN_JSON secret is set correctly in GitHub.")
 
     # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
@@ -42,7 +42,7 @@ def get_authenticated_service(client_secret_file, token_file):
         else:
             if not os.path.exists(client_secret_file) or os.path.getsize(client_secret_file) == 0:
                 logger.error(f"❌ Cannot find or validate client secret file at {client_secret_file}.")
-                logger.error("Please ensure GOOGLE_CLIENT_SECRET_BASE64 secret is configured correctly in GitHub.")
+                logger.error("Please ensure GOOGLE_CLIENT_SECRET_JSON secret is configured correctly in GitHub.")
                 return None
             
             # If we are strictly headless (like GitHub Actions), run_local_server will hang or crash.
