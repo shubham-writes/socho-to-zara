@@ -38,15 +38,54 @@ def _build_tts_text(riddle_data: dict) -> tuple[str, str]:
     return script1, script2
 
 
-def _build_ssml(text: str, voice: str, rate: str) -> str:
+def _build_ssml_riddle(text: str, voice: str, rate: str) -> str:
     """
-    Builds SSML markup for Azure Speech with the given voice and rate.
+    Builds expressive SSML for the riddle part (Part 1).
+    Uses natural pauses, pitch variation, and emphasis for a storytelling feel.
     """
+    # Split by the separator we use: "। "
+    parts = text.split("। ")
+    # Typically: [hook, riddle, "थोड़ा सोचिए"]
+    hook = parts[0] if len(parts) > 0 else ""
+    riddle = parts[1] if len(parts) > 1 else ""
+    think = parts[2].rstrip("।") if len(parts) > 2 else "थोड़ा सोचिए"
+
     return (
-        '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="hi-IN">'
+        '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" '
+        'xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="hi-IN">'
         f'<voice name="{voice}">'
         f'<prosody rate="{rate}">'
+        f'<mstts:express-as style="excited">'
+        f'{hook}।'
+        f'</mstts:express-as>'
+        '<break time="400ms"/>'
+        f'<prosody pitch="+5%">'
+        f'{riddle}।'
+        f'</prosody>'
+        '<break time="600ms"/>'
+        f'<mstts:express-as style="friendly">'
+        f'<prosody rate="-10%" pitch="-5%">'
+        f'{think}।'
+        f'</prosody>'
+        f'</mstts:express-as>'
+        '</prosody>'
+        '</voice>'
+        '</speak>'
+    )
+
+
+def _build_ssml_answer(text: str, voice: str, rate: str) -> str:
+    """
+    Builds expressive SSML for the answer part (Part 2).
+    """
+    return (
+        '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" '
+        'xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="hi-IN">'
+        f'<voice name="{voice}">'
+        f'<prosody rate="{rate}">'
+        f'<mstts:express-as style="cheerful">'
         f'{text}'
+        f'</mstts:express-as>'
         '</prosody>'
         '</voice>'
         '</speak>'
@@ -61,13 +100,14 @@ def _synthesize_to_file(
     rate: str,
     speech_key: str,
     speech_region: str,
+    is_riddle_part: bool = True,
 ) -> None:
     """
     Synthesize speech using Azure SDK, saving audio and word-level timestamps.
     """
     speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=speech_region)
     speech_config.set_speech_synthesis_output_format(
-        speechsdk.SpeechSynthesisOutputFormat.Audio16Khz128KBitRateMonoMp3
+        speechsdk.SpeechSynthesisOutputFormat.Audio48Khz192KBitRateMonoMp3
     )
 
     audio_config = speechsdk.audio.AudioOutputConfig(filename=str(output_audio))
@@ -89,7 +129,10 @@ def _synthesize_to_file(
 
     synthesizer.synthesis_word_boundary.connect(on_word_boundary)
 
-    ssml = _build_ssml(text, voice, rate)
+    if is_riddle_part:
+        ssml = _build_ssml_riddle(text, voice, rate)
+    else:
+        ssml = _build_ssml_answer(text, voice, rate)
     logger.info("🗣️ Synthesizing with Azure voice: %s", voice)
     result = synthesizer.speak_ssml_async(ssml).get()
 
@@ -142,8 +185,8 @@ def generate_voiceover(
     logger.info("📝 TTS script Part 1: %s", text1[:80] + "...")
     logger.info("📝 TTS script Part 2: %s", text2[:80] + "...")
 
-    _synthesize_to_file(text1, output_audio1, output_subs1, voice, rate, AZURE_API_KEY, AZURE_REGION)
-    _synthesize_to_file(text2, output_audio2, output_subs2, voice, rate, AZURE_API_KEY, AZURE_REGION)
+    _synthesize_to_file(text1, output_audio1, output_subs1, voice, rate, AZURE_API_KEY, AZURE_REGION, is_riddle_part=True)
+    _synthesize_to_file(text2, output_audio2, output_subs2, voice, rate, AZURE_API_KEY, AZURE_REGION, is_riddle_part=False)
 
     return output_audio1, output_subs1, output_audio2, output_subs2
 
