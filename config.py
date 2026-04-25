@@ -35,6 +35,11 @@ GEMINI_API_KEY       = os.getenv("GEMINI_API_KEY", "")
 PEXELS_API_KEY       = os.getenv("PEXELS_API_KEY", "")
 VIDEO_HOST_BASE_URL  = os.getenv("VIDEO_HOST_BASE_URL", "")
 
+# ─── Azure Speech Credentials ────────────────────────────────────────────────
+AZURE_API_KEY        = os.getenv("AZURE_API_KEY", "")
+AZURE_REGION         = os.getenv("AZURE_REGION", "")
+AZURE_ENDPOINT       = os.getenv("AZURE_ENDPOINT", "")
+
 # ─── YouTube Credentials ─────────────────────────────────────────────────────
 YOUTUBE_CLIENT_SECRET_FILE = PROJECT_ROOT / "client_secret.json"
 YOUTUBE_TOKEN_FILE         = PROJECT_ROOT / "token.json"
@@ -43,7 +48,7 @@ YOUTUBE_TOKEN_FILE         = PROJECT_ROOT / "token.json"
 TELEGRAM_BOT_TOKEN         = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID           = os.getenv("TELEGRAM_CHAT_ID", "")
 
-# ─── TTS Settings ────────────────────────────────────────────────────────────
+# ─── TTS Settings (Azure Speech) ─────────────────────────────────────────────
 TTS_VOICE = os.getenv("TTS_VOICE", "hi-IN-MadhurNeural")
 TTS_RATE  = os.getenv("TTS_RATE", "+5%")
 

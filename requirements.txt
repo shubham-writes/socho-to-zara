@@ -1,4 +1,4 @@
-edge-tts
+azure-cognitiveservices-speech
 moviepy>=2.0.0
 Pillow
 requests

@@ -47,6 +47,8 @@ jobs:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          AZURE_API_KEY: ${{ secrets.AZURE_API_KEY }}
+          AZURE_REGION: ${{ secrets.AZURE_REGION }}
         run: |
           python pipeline.py
           

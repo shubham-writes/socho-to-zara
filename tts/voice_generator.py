@@ -1,19 +1,16 @@
 """
 Stage 2: Voiceover — Text-to-Speech Generator
 
-Uses the `edge-tts` library (Microsoft Edge neural voices) to generate
-natural-sounding voiceovers. 100% free, no API key required.
-
-Also produces word-level subtitle timestamps for caption burning.
+Uses the Azure Cognitive Services Speech SDK for natural,
+human-like Hindi voiceovers with word-level timestamps for captions.
 """
 
-import asyncio
 import json
 import logging
-import re
+import time
 from pathlib import Path
 
-import edge_tts
+import azure.cognitiveservices.speech as speechsdk
 
 logger = logging.getLogger(__name__)
 
@@ -41,64 +38,73 @@ def _build_tts_text(riddle_data: dict) -> tuple[str, str]:
     return script1, script2
 
 
-async def _generate_audio_async(
+def _build_ssml(text: str, voice: str, rate: str) -> str:
+    """
+    Builds SSML markup for Azure Speech with the given voice and rate.
+    """
+    return (
+        '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="hi-IN">'
+        f'<voice name="{voice}">'
+        f'<prosody rate="{rate}">'
+        f'{text}'
+        '</prosody>'
+        '</voice>'
+        '</speak>'
+    )
+
+
+def _synthesize_to_file(
     text: str,
     output_audio: Path,
     output_subs: Path,
-    voice: str = "hi-IN-MadhurNeural",
-    rate: str = "+5%",
+    voice: str,
+    rate: str,
+    speech_key: str,
+    speech_region: str,
 ) -> None:
     """
-    Async core: generate audio + subtitle metadata via edge-tts.
+    Synthesize speech using Azure SDK, saving audio and word-level timestamps.
     """
-    communicate = edge_tts.Communicate(text, voice, rate=rate)
-    submaker = edge_tts.SubMaker()
-    word_boundary_count = 0
-
-    with open(output_audio, "wb") as audio_file:
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                audio_file.write(chunk["data"])
-            elif chunk["type"] == "WordBoundary":
-                submaker.feed(chunk)
-                word_boundary_count += 1
-
-    logger.info("📊 WordBoundary events received: %d", word_boundary_count)
-
-    # Generate SRT subtitles
-    srt_content = submaker.get_srt()
-    subtitle_entries = _parse_srt(srt_content)
-
-    with open(output_subs, "w", encoding="utf-8") as f:
-        json.dump(subtitle_entries, f, indent=2, ensure_ascii=False)
-
-    logger.info("🎙️ Audio saved: %s (%d subtitle entries)", output_audio, len(subtitle_entries))
-
-
-def _parse_srt(srt_text: str) -> list[dict]:
-    """
-    Parse SRT content into a list of subtitle entries:
-    [{"start": 0.5, "end": 1.2, "text": "word"}, ...]
-    """
-    entries = []
-    # Match SRT cue blocks:
-    # 1
-    # 00:00:00,000 --> 00:00:01,000
-    # text
-    pattern = re.compile(
-        r"(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*\n(.+?)(?:\n\n|\Z)",
-        re.MULTILINE | re.DOTALL,
+    speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=speech_region)
+    speech_config.set_speech_synthesis_output_format(
+        speechsdk.SpeechSynthesisOutputFormat.Audio16Khz128KBitRateMonoMp3
     )
 
-    for match in pattern.finditer(srt_text):
-        h1, m1, s1, ms1, h2, m2, s2, ms2, text = match.groups()
-        start = int(h1) * 3600 + int(m1) * 60 + int(s1) + int(ms1) / 1000.0
-        end = int(h2) * 3600 + int(m2) * 60 + int(s2) + int(ms2) / 1000.0
-        word = text.strip()
-        if word:
-            entries.append({"start": round(start, 3), "end": round(end, 3), "text": word})
+    audio_config = speechsdk.audio.AudioOutputConfig(filename=str(output_audio))
 
-    return entries
+    synthesizer = speechsdk.SpeechSynthesizer(
+        speech_config=speech_config,
+        audio_config=audio_config
+    )
+
+    # Collect word-level timestamps
+    word_boundaries = []
+
+    def on_word_boundary(evt):
+        word_boundaries.append({
+            "start": round(evt.audio_offset / 10_000_000, 3),  # ticks → seconds
+            "end": round((evt.audio_offset + evt.duration) / 10_000_000, 3),
+            "text": evt.text
+        })
+
+    synthesizer.synthesis_word_boundary.connect(on_word_boundary)
+
+    ssml = _build_ssml(text, voice, rate)
+    logger.info("🗣️ Synthesizing with Azure voice: %s", voice)
+    result = synthesizer.speak_ssml_async(ssml).get()
+
+    if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
+        logger.info("🎙️ Audio saved: %s (%d word boundaries)", output_audio, len(word_boundaries))
+    elif result.reason == speechsdk.ResultReason.Canceled:
+        cancellation = result.cancellation_details
+        logger.error("❌ Azure TTS canceled: %s", cancellation.reason)
+        if cancellation.error_details:
+            logger.error("❌ Error details: %s", cancellation.error_details)
+        raise RuntimeError(f"Azure TTS failed: {cancellation.reason} — {cancellation.error_details}")
+
+    # Save subtitle entries
+    with open(output_subs, "w", encoding="utf-8") as f:
+        json.dump(word_boundaries, f, indent=2, ensure_ascii=False)
 
 
 def generate_voiceover(
@@ -115,10 +121,13 @@ def generate_voiceover(
     Returns:
         (audio1, subs1, audio2, subs2)
     """
-    from config import AUDIO_DIR, TTS_VOICE, TTS_RATE
+    from config import AUDIO_DIR, TTS_VOICE, TTS_RATE, AZURE_API_KEY, AZURE_REGION
 
     voice = voice or TTS_VOICE
     rate = rate or TTS_RATE
+
+    if not AZURE_API_KEY or not AZURE_REGION:
+        raise RuntimeError("AZURE_API_KEY or AZURE_REGION not set. Please add them to your .env file.")
 
     if output_audio1 is None:
         output_audio1 = AUDIO_DIR / "voiceover1.mp3"
@@ -133,18 +142,19 @@ def generate_voiceover(
     logger.info("📝 TTS script Part 1: %s", text1[:80] + "...")
     logger.info("📝 TTS script Part 2: %s", text2[:80] + "...")
 
-    # Run the async functions for both chunks
-    asyncio.run(_generate_audio_async(text1, output_audio1, output_subs1, voice, rate))
-    asyncio.run(_generate_audio_async(text2, output_audio2, output_subs2, voice, rate))
+    _synthesize_to_file(text1, output_audio1, output_subs1, voice, rate, AZURE_API_KEY, AZURE_REGION)
+    _synthesize_to_file(text2, output_audio2, output_subs2, voice, rate, AZURE_API_KEY, AZURE_REGION)
 
     return output_audio1, output_subs1, output_audio2, output_subs2
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     # Quick test with a sample riddle
     sample = {
+        "id": 2,
         "hook": "क्या आप इसे सुलझा सकते हैं?",
-        "riddle": "काला घोड़ा, सफ़ेद की सवारी। एक उतरा तो दूसरे की बारी।",
+        "riddle": "काला घोड़ा, सफ़ेद की सवारी। एक उतरा तो दूसरे की बारी।",
         "answer": "तवा और रोटी!",
     }
     a1, s1, a2, s2 = generate_voiceover(sample)
